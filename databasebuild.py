@@ -5,49 +5,58 @@ import MySQLdb as mysql
 import wikipedia 
 import sys
 from retrying import retry
+import chardet 
 
-conn = mysql.connect('localhost', 'testuser', 
-        'test623', 'demoflowerdb');
+#conn = mysql.connect('localhost', 'testuser', 
+#        'test623', 'demoflowerdb');
+conn = mysql.connect('localhost','dauser','balabala','flowerdatabase')
 cur = conn.cursor()
 
 conn.set_character_set('utf8')
 cur.execute('SET NAMES utf8;') 
 cur.execute('SET CHARACTER SET utf8;')
 cur.execute('SET character_set_connection=utf8;')
-#cur.execute("select * from flower")
-#rows = cur.fetchall()
-#for row in rows:
-#    print row
 
-@retry(stop_max_attempt_number=2)
+@retry(stop_max_attempt_number=10)
 def getinfo(conn,cur,index,count):
+    print index,":",count
+    index = index.replace("\'"," ")
+    index = index.replace('\"'," ")
     print index
-    print count
     try:
 	content = wikipedia.search(index,"flower")
-    	page = wikipedia.page(content[0])
-	description = page.content    
+	page = wikipedia.page(content[0])
+   	description = wikipedia.summary(content[0])    
     	web = page.url
-    	print description
-    	print web
-    except  Exception:
-	print "###########ERRO################"
-	return 0
+	description = description.replace('\"'," ")
+	description = description.replace("\'"," ")
+    except  wikipedia.exceptions.DisambiguationError as err:
+	print "##############DISAMBIGUATION IN  WIKI###################"
+	page = wikipedia.page(err.options[0])
+	description = wikipedia.summary(err.options[0])
+	description = description.replace('\"'," ")
+        description = description.replace("\'"," ")
+	web = page.url
+
     try:
     	cur.execute(    "INSERT INTO flower(name, \
-    		  id, description, web) \
+    		  unique_id, description, web) \
     		   VALUES ('%s', '%d', '%s', '%s' )" % \
-    		   (index, count, description[1:500],web ))
-    except Exception:
-	print "############ERRO################"
-    	return -1
+    		   (index, count, description,web ))
+    except mysql.Error,e:
+	print "####################ERRO IN DB########################"
+#	print "Mysql Error %d: %s" % (e.args[0], e.args[1])
+	return -1
+
     conn.commit()
+    print     "=================INSERT SUCCESSFULLY=================="
+    print web
     return 1
 
-count =1
+count = 0
 for index in labels:
-    count = count + 1
     getinfo(conn,cur,index,count)
+    count = count + 1
 
 conn.close()
 
